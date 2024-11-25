@@ -19,54 +19,89 @@ def test_model(model, test_loader):
     return correct / total
 
 def train_network(model, train_loader, test_loader, epochs, optimizer, criterion):
+    train_losses = []
+    test_losses = []
     train_accuracies = []
     test_accuracies = []
-    train_losses = []
+    training_examples_seen = []  # 记录每次累积的样本数
+    num_seen = 0  # 当前累积的训练样本数
 
     for epoch in range(epochs):
         model.train()
-        train_loss = 0
-        correct = 0
-        total = 0
+        epoch_loss = 0
+        correct_train = 0
+        total_train = 0
 
         for data, target in train_loader:
+            # 前向传播
             optimizer.zero_grad()
             output = model(data)
             loss = criterion(output, target)
             loss.backward()
             optimizer.step()
-            train_loss += loss.item()
 
+            # 记录损失
+            epoch_loss += loss.item()
             _, predicted = torch.max(output, 1)
-            correct += (predicted == target).sum().item()
-            total += target.size(0)
+            correct_train += (predicted == target).sum().item()
+            total_train += target.size(0)
 
-        train_accuracy = correct / total
-        test_accuracy = test_model(model, test_loader)
+            # 累积样本数
+            num_seen += data.size(0)
+            training_examples_seen.append(num_seen)
+            train_losses.append(loss.item())
 
+        # 计算训练准确率
+        train_accuracy = correct_train / total_train
         train_accuracies.append(train_accuracy)
+
+        # 计算测试损失和准确率
+        model.eval()
+        test_loss = 0
+        correct_test = 0
+        total_test = 0
+        with torch.no_grad():
+            for data, target in test_loader:
+                output = model(data)
+                test_loss += criterion(output, target).item()
+                _, predicted = torch.max(output, 1)
+                correct_test += (predicted == target).sum().item()
+                total_test += target.size(0)
+
+        test_loss /= len(test_loader)
+        test_accuracy = correct_test / total_test
+
+        test_losses.append(test_loss)
         test_accuracies.append(test_accuracy)
-        train_losses.append(train_loss / len(train_loader))
 
-        print(f"Epoch {epoch + 1}/{epochs}, Loss: {train_loss / len(train_loader):.4f}, "
-              f"Train Accuracy: {train_accuracy * 100:.2f}%, Test Accuracy: {test_accuracy * 100:.2f}%")
+        print(f'Epoch {epoch + 1}: Training Loss = {epoch_loss / len(train_loader):.4f}, '
+              f'Training Accuracy = {train_accuracy * 100:.2f}%, '
+              f'Test Loss = {test_loss:.4f}, Test Accuracy = {test_accuracy * 100:.2f}%')
 
-    plt.figure(figsize=(10, 5))
-    plt.plot(train_accuracies, label="Train Accuracy")
-    plt.plot(test_accuracies, label="Test Accuracy")
-    plt.xlabel("Epoch")
-    plt.ylabel("Accuracy")
+    # 生成训练和测试损失图
+    plt.figure(figsize=(10, 6))
+    plt.plot(training_examples_seen, train_losses, label='Train loss', color='blue', linewidth=1)
+    plt.scatter(
+        [training_examples_seen[i * len(train_loader) - 1] for i in range(1, epochs + 1)],
+        test_losses,
+        label='Test loss',
+        color='red'
+    )
+    plt.xlabel("Number of training examples seen")
+    plt.ylabel("Negative Log Likelihood Loss")
+    plt.title("Training and Test Loss over Training Examples")
     plt.legend()
-    plt.title("Training and Testing Accuracy")
     plt.grid()
     plt.show()
 
-    plt.figure(figsize=(10, 5))
-    plt.plot(train_losses, label="Train Loss")
-    plt.xlabel("Epoch")
-    plt.ylabel("Loss")
+    # 生成训练和测试准确率图
+    plt.figure(figsize=(10, 6))
+    plt.plot(range(epochs), train_accuracies, label='Train Accuracy', color='blue', linewidth=1)
+    plt.plot(range(epochs), test_accuracies, label='Test Accuracy', color='orange', linewidth=1)
+    plt.xlabel("Epochs")
+    plt.ylabel("Accuracy")
+    plt.title("Training and Testing Accuracy")
     plt.legend()
-    plt.title("Training Loss")
     plt.grid()
     plt.show()
 

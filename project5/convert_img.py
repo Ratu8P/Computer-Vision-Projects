@@ -28,6 +28,6 @@ def main(input_folder, output_folder):
 
 
 if __name__ == "__main__":
-    input_folder = "./data/greek_handwritten"  # 替换为包含 .jpeg 文件的文件夹路径
-    output_folder = "./data/greek_handwritten_processed"  # 替换为保存处理后文件的文件夹路径
+    input_folder = "./data/greek_handwritten"  
+    output_folder = "./data/greek_handwritten_processed" 
     main(input_folder, output_folder)
