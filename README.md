@@ -289,4 +289,200 @@ Total RC UAER error count: 0
 Total EP lane error count: 2
 Total EP link down error count: 0
 
+现在我有足够的信息来解释问题了。
+
+  ---
+  根本原因分析
+
+  DVT 报告 1 个错误（AER CE），Shell 脚本报告 2 个（AER CE + Lane Error）
+
+  问题所在
+
+  关键在于 DVT 读取 Lane Error 的前提条件（PCIeTest.py:308-312）：
+
+  if dut.SecondaryPCIeExtCapAdr != 0xFFFF:    # ← 必须找到 Cap ID=0x19
+      ep_LaneErrorStatus = dut.PCIeConfigRead32(
+          dut.SecondaryPCIeExtCapAdr + 0x8)
+  else:
+      ep_LaneErrorStatus = 0x0                  # ← 找不到就置0，跳过检查
+
+  SecondaryPCIeExtCapAdr 在设备初始化时通过 findExtCapAdr(0x19) 查找（Device.py:77）。
+
+  两种可能原因：
+
+  ---
+  可能原因 1：Cap 0x19 未找到（最可能）
+
+  ┌────────────────────┬────────────────────────────────────────────┐
+  │        工具        │                  查找方式                  │
+  ├────────────────────┼────────────────────────────────────────────┤
+  │ DVT                │ 启动时扫描一次 ExtCap 链表，找到后保存地址 │
+  ├────────────────────┼────────────────────────────────────────────┤
+  │ setpci ECAP_SECPCI │ 每次调用时实时扫描 ExtCap 链表             │
+  └────────────────────┴────────────────────────────────────────────┘
+
+  如果 DVT 初始化时（第 1 次 cycle 之前）设备还没 expose 出 Cap 0x19，SecondaryPCIeExtCapAdr = 0xFFFF，之后所有 cycle
+  都跳过 Lane Error 检查。
+
+  验证方法——在目标机器上运行：
+
+  # 检查该设备是否有 Secondary PCIe Extended Capability (Cap ID=0x19)
+  setpci -s 98:00.0 ECAP_SECPCI+0.L
+  # 若返回 00000019，则 cap 存在；若报错则不存在
+
+  ---
+  可能原因 2：时序问题
+
+  DVT 执行 Hot Reset
+       │
+       ├── DVT 读 AER CE = 0x1  ✓ 检测到
+       ├── DVT 读 Lane Error = 0x0  ← 此时还未置位
+       │
+       └── 之后 Lane Error 才被 EP 置为 0x4
+             │
+             └── Shell 脚本读到 Lane Error = 0x4
+
+  DVT 的读取时机可能早于 Lane Error 被设备置位。
+
+  ---
+  如何确认
+
+  在 DVT 日志中搜索设备初始化时是否打印了 ExtCap 相关信息，或临时添加一行 debug：
+
+  # Device.py:77 附近
+  self.SecondaryPCIeExtCapAdr = self.findExtCapAdr(0x19)
+  # 查看实际值：
+  print(f"SecondaryPCIeExtCapAdr = 0x{self.SecondaryPCIeExtCapAdr:X}")
+
+  如果输出是 0xFFFF，就是原因 1；如果有合法地址（如 0x1A0），就是原因 2（时序问题）。
+
+✻ Baked for 2m 6s
+
+❯   setpci -s 98:00.0 ECAP_SECPCI+0.L 输出40010019， 如果我想让dvt 也检测lane error该怎么做
+
+● 40010019 说明 Cap 0x19 确实存在。让我找出 DVT 在检查前是否提前清除了 Lane Error。
+
+● Searched for 4 patterns, read 5 files (ctrl+o to expand)
+
+● 找到关键了！让我看 capabilities.json。
+
+● Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+● 找到真正的根本原因了。
+
+  根本原因
+
+  init_extend_cap_adr_book() 在扫描 Extended Cap 链表时，遇到 capabilities.json 里没有的 Cap ID 就会
+  break（Device_base.py:541）：
+
+  else:
+      if self.is_ep:
+          self.dut_logger.error('...Ext Cap({:04X}) in offset 0x{:03X} was invalid.')
+          break   # ← 遇到未知 Cap 就停止扫描！
+
+  如果设备在 Cap 链表中，0x19 之前有一个不在 capabilities.json 里的 Cap，DVT 就永远扫不到 0x19，导致
+  SecondaryPCIeExtCapAdr = 0xFFFF，Lane Error 被跳过。
+
+  ---
+  第一步：确认原因
+
+  在测试机上查找 DVT 初始化日志：
+
+  grep -i "secondary\|broken.*cap\|invalid\|does not support" /root/DVT/Log/*.log | head -30
+
+  - 如果看到 does not support Secondary PCIe Ext Cap → 确认是这个问题
+  - 如果看到 Endpoint PCIe Configuration Space was broken. Ext Cap(XXXX) → 可以看到是哪个 Cap 导致中断
+
+  同时运行以下命令，找出设备实际有哪些 Extended Caps：
+
+  lspci -vvv -s 0000:98:00.0 | grep "Extended Capabilities"
+
+  ---
+  第二步：修复（将缺失的 Cap 加入 capabilities.json）
+
+  假设 lspci 输出显示某个未知 Cap（例如 0x000C = MFVC），在 Config/capabilities.json 的 "extend" 数组中加入对应条目：
+
+  {
+      "CapId": 12,
+      "Name": "MFVC Extended Cap",
+      "Required": false,
+      "Ext": true
+  },
+
+  常见容易缺失的 Cap ID（十进制）：
+
+  ┌─────┬────────────────────────────────────┐
+  │ ID  │                名称                │
+  ├─────┼────────────────────────────────────┤
+  │ 12  │ MFVC (Multi-Function VC)           │
+  ├─────┼────────────────────────────────────┤
+  │ 15  │ ATS (Address Translation Services) │
+  ├─────┼────────────────────────────────────┤
+  │ 16  │ SR-IOV                             │
+  ├─────┼────────────────────────────────────┤
+  │ 19  │ Page Request Interface             │
+  ├─────┼────────────────────────────────────┤
+  │ 26  │ REBAR                              │
+  └─────┴────────────────────────────────────┘
+
+  ---
+  第三步：验证 Cap 是否被找到
+
+  修改后重新运行 DVT，在 cycle 1 的日志里应该能看到：
+
+  Port(0x0:98:00.0) Supports SECONDARY PCI EXPRESS EXTENDED CAPABILITY(0019h).
+
+  以及 clear_lane_error() 打印的：
+  DUT(0:98:0.0) Lane Error Status is 0x0 at the beginning.
+
+  之后若 Lane Error 发生，DVT 会正常报告：
+  ERROR | Endpoint Lane Error Status is 0x4.
+
+✻ Cooked for 4m 2s
+
+❯ 我现在缺失的哪个cap？ 怎么添加
+
+● 我没有办法直接看到你的设备，需要你在测试机上跑一个命令来找出答案。
+
+● Read 1 file (ctrl+o to expand)
+
+● 第一步：在测试机上扫描设备的 Extended Cap 链表
+
+  在 CentOS 机器上运行这个 Python 脚本：
+
+  python3 -c "
+  import subprocess
+
+  addr = 0x100
+  known = {1,2,3,4,5,6,7,8,9,10,11,13,14,18,20,21,22,23,24,25,27,28,29,30,31,33,34,35,37,38,39,40,41,42,43,44,47,48,49,5
+  0,51,52,53,54}
+
+  print('--- Extended Cap Chain for 98:00.0 ---')
+  while addr != 0:
+      out = subprocess.check_output(['setpci','-s','98:00.0', hex(addr)+'.L'], text=True).strip()
+      val = int(out, 16)
+      capid = val & 0xFFFF
+      next_addr = (val >> 20) & 0xFFF
+      status = 'OK' if capid in known else '<<< MISSING IN capabilities.json'
+      print(f'  offset=0x{addr:03X}  CapID=0x{capid:04X} ({capid:3d})  next=0x{next_addr:03X}  {status}')
+      if next_addr == 0:
+          break
+      addr = next_addr
+  "
+
+  把输出结果贴给我，我告诉你要加哪几行。
+
+  ---
+  如果你已经看到 DVT 日志里有类似这行
+
+  ERROR | Endpoint PCIe Configuration Space was broken. Ext Cap(XXXX) in offset 0xYYY was invalid.
+
+  直接把 XXXX（十六进制 Cap ID）告诉我，也可以直接定位。
+
+✻ Cogitated for 31s
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ? for shortcuts
 
