@@ -484,5 +484,29 @@ Total EP link down error count: 0
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 ❯ 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  ? for shortcuts
+
+
+[root@sjac DVT]# python3 test_cap.py 
+--- Extended Cap Chain for 98:00.0 ---
+  offset=0x100  CapID=0x0001 (  1)  next=0x150  OK
+  offset=0x150  CapID=0x0003 (  3)  next=0x160  OK
+  offset=0x160  CapID=0x0004 (  4)  next=0x1B8  OK
+  offset=0x1B8  CapID=0x0018 ( 24)  next=0x274  OK
+  offset=0x274  CapID=0x0017 ( 23)  next=0x300  OK
+  offset=0x300  CapID=0x0019 ( 25)  next=0x400  OK
+  offset=0x400  CapID=0x000B ( 11)  next=0x440  OK
+  offset=0x440  CapID=0x001B ( 27)  next=0x4C0  OK
+  offset=0x4C0  CapID=0x0002 (  2)  next=0x900  OK
+  offset=0x900  CapID=0x001E ( 30)  next=0x910  OK
+  offset=0x910  CapID=0x0025 ( 37)  next=0x920  OK
+  offset=0x920  CapID=0x0027 ( 39)  next=0x9C0  OK
+  offset=0x9C0  CapID=0x0026 ( 38)  next=0xA40  OK
+  offset=0xA40  CapID=0x002A ( 42)  next=0xAA0  OK
+  offset=0xAA0  CapID=0x0031 ( 49)  next=0xAD0  OK
+  offset=0xAD0  CapID=0x0032 ( 50)  next=0xB10  OK
+  offset=0xB10  CapID=0x0033 ( 51)  next=0xB40  OK
+  offset=0xB40  CapID=0x0034 ( 52)  next=0xA70  OK
+  offset=0xA70  CapID=0x002B ( 43)  next=0xA90  OK
+  offset=0xA90  CapID=0x002F ( 47)  next=0xE00  OK
+  offset=0xE00  CapID=0x0000 (  0)  next=0x000  <<< MISSING IN capabilities.json
 
