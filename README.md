@@ -510,3 +510,82 @@ Total EP link down error count: 0
   offset=0xA90  CapID=0x002F ( 47)  next=0xE00  OK
   offset=0xE00  CapID=0x0000 (  0)  next=0x000  <<< MISSING IN capabilities.json
 
+
+Hi,
+
+  I'd like to share some findings on how DVT handles PCIe error detection and a few configuration options that may help
+  focus the test on the errors you care about.
+
+  ---
+  DVT Error Detection Logic
+
+  After each reset event (e.g., Hot Reset), DVT performs a single snapshot read of all relevant PCIe registers at the
+  same point in time, then checks each error type independently using the pcie_error_bits bitmask. Because all checks
+  are sequential if statements with no early exit, multiple errors can be reported within the same cycle as long as they
+   are all present at the moment DVT reads the registers.
+
+  The timing of this read is controlled by PCIe_checking_delay in DVT.cfg (default: 0.3s). This delay is applied after
+  the PCIe link is re-established following a reset.
+
+  ---
+  Option 1 — Increase PCIe_checking_delay to Catch Multiple Errors
+
+  Some error bits (e.g., Lane Error Status, bit 9) are latched by the hardware slightly later than others (e.g., AER
+  Correctable Error, bit 4). If DVT reads too early, it may miss the Lane Error even though it appears shortly after.
+
+  Increasing the delay gives the hardware more time to latch all error bits before DVT reads:
+
+  PCIe_checking_delay = 1.0    # increased from default 0.3s
+
+  With this change, DVT should be able to catch both errors simultaneously in the same cycle:
+  ERROR | Endpoint Correctable Error is 0x1.
+  ERROR | Endpoint Lane Error Status is 0x4.
+
+  ---
+  Option 2 — Mask Bits 3 & 4 to Focus on Lane Error (Bit 9)
+
+  If you are not interested in Receiver Errors (AER Correctable, bit 4) or In-band Reset (bit 3), you can disable them
+  and focus solely on Lane Error detection (bit 9):
+
+  [Hotreset_test]
+  PCIe_Error_Bits = 0xFFFE7    # disable bit3 (In-band Reset) + bit4 (AER CE)
+
+  However, from my experiments, this approach frequently triggers Config Space Mismatch errors (bit 12) as a side
+  effect, because increasing PCIe_checking_delay causes DVT to read the config space at a later point when certain
+  vendor-specific and status registers have already been updated by firmware. Examples observed:
+
+  - Offset=0xE9Fh, Init Value=0x00, Current Value=0x70
+  - Offset=0x0E5h, Init Value=0x08, Current Value=0x18
+  - A third offset mismatch appearing at the same time
+
+  These three mismatches tend to appear together in the same cycle, as they are all status/initialization registers that
+   settle after link re-training completes.
+
+  ---
+  Option 3 — Also Mask Bit 12 if Config Space Errors Are Not Your Target
+
+  If the config space mismatches above are not the failure mode you are investigating, you can additionally disable bit
+  12 (Config Space Compare) to suppress these false positives:
+
+  [Hotreset_test]
+  PCIe_Error_Bits = 0xFEFE7    # disable bit3 + bit4 + bit12, retain bit9
+
+  This keeps Lane Error detection (bit 9) fully active while eliminating the noise from receiver errors and config space
+   drift caused by the longer checking delay.
+
+  ---
+  Summary
+
+  ┌──────────────────────────────────────────────────┬───────────────────────────┐
+  │                       Goal                       │    Recommended Setting    │
+  ├──────────────────────────────────────────────────┼───────────────────────────┤
+  │ Catch both AER CE and Lane Error                 │ PCIe_checking_delay = 1.0 │
+  ├──────────────────────────────────────────────────┼───────────────────────────┤
+  │ Focus on Lane Error only                         │ PCIe_Error_Bits = 0xFFFE7 │
+  ├──────────────────────────────────────────────────┼───────────────────────────┤
+  │ Focus on Lane Error, suppress config space noise │ PCIe_Error_Bits = 0xFEFE7 │
+  └──────────────────────────────────────────────────┴───────────────────────────┘
+
+  Please let me know if you have any questions.
+
+  Best regards
