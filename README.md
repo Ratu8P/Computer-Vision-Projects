@@ -456,3 +456,15 @@ LoRA (Low-Rank Adaptation) for parameter-efficient model training and customizat
 Designing and operating MCP Servers (Model Context Protocol Servers) to manage dynamic model input contexts, enable multi-source context aggregation, and support unified API interfaces across knowledge platforms
 Our projects are actively progressing, though large-scale training and indexing depend on upcoming hardware upgrades. The new infrastructure will be crucial for accelerating R&D, enabling larger context handling, and improving system responsiveness.
 
+
+Student Role: Describe the student's role with the employer and how that role is directly related to enhancing the student's knowledge obtained
+through his or her qualifying STEM degree.
+Goals and Objectives: Describe how the assignment(s) with the employer will help the student achieve his or her specific objectives for work-based
+learning related to his or her STEM degree. The description must both specify the student's goals regarding specific knowledge, skills, or techniques
+as well as the means by which they will be achieved.
+Employer Oversight: Explain how the employer provides oversight and supervision of individuals filling positions such as that being filled by the
+named F-1 student. If the employer has a training program or related policy in place that controls such oversight and supervision, please describe.
+Measures and Assessments: Explain how the employer measures and confirms whether individuals filling positions such as that being filled by the
+named F-1 student are acquiring new knowledge and skills. If the employer has a training program or related policy in place that controls such
+measures and assessments, please describe.
+ICE Form I-983 (7/16) 
