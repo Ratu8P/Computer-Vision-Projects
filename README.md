@@ -72,7 +72,18 @@ Current Description
   ├────────────────────┼───────────────────────────────────────────────────────────────────────────────┤                                                                         
   │ Knowledge Quality  │ Stale or conflicting entries reviewed and corrected on a monthly basis        │                                                                         
   └────────────────────┴───────────────────────────────────────────────────────────────────────────────┘                                                                         
+   2. Optimization Plan & Timeline
+
+  ┌──────────┬────────────────────────┬────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │ Timeline │        Feature         │                                                              Formula                                                               │
+  ├──────────┼────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ Q3 2026  │ Historical Query       │ ≥ 95% of historical JIRA issues indexed at launch; query returns accurate results for ≥ 80% of test questions evaluated bi-monthly │
+  ├──────────┼────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ Q4 2026  │ Summary Augmentation   │ Daily summaries enriched with historical context; improvement validated by leader spot check ≥ 4/5 bi-monthly                      │     
+  ├──────────┼────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤     
+  │ Q1 2027  │ HiRAG + LLM Wiki Layer │ Hierarchical knowledge structure established; knowledge base self-updates with each daily pipeline run without manual intervention │     
+  └──────────┴────────────────────────┴────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘     
                   
-✻ Cooked for 11s                                                                                                                                                                 
+                                                                                                                
                   
 
